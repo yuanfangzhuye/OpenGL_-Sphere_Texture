@@ -53,6 +53,37 @@ void drawSomething(GLfloat yRot) {
 
 bool LoadTGATexture(const char *szFileName, GLenum minFilter, GLenum magFilter, GLenum wrapMode) {
     
+    GLbyte *pBytes;
+    GLint newWidth,newHeight,newComponents;
+    GLenum eFormate;
+    
+    pBytes = gltReadTGABits(szFileName, &newWidth, &newHeight, &newComponents, &eFormate);
+    if (pBytes == NULL) {
+        return false;
+    }
+    
+    //设置纹理参数
+    
+    //环绕方式
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
+    
+    //过滤方式
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+    
+    glTexImage2D(GL_TEXTURE_2D, 0, newComponents, newWidth, newHeight, 0, eFormate, GL_UNSIGNED_BYTE, pBytes);
+    
+    free(pBytes);
+    
+    if(minFilter == GL_LINEAR_MIPMAP_LINEAR ||
+       minFilter == GL_LINEAR_MIPMAP_NEAREST ||
+       minFilter == GL_NEAREST_MIPMAP_LINEAR ||
+       minFilter == GL_NEAREST_MIPMAP_NEAREST)
+    //4.加载Mip,纹理生成所有的Mip层
+    //参数：GL_TEXTURE_1D、GL_TEXTURE_2D、GL_TEXTURE_3D
+    glGenerateMipmap(GL_TEXTURE_2D);
+    
     return true;
 }
 
@@ -62,10 +93,69 @@ void RenderScene(void) {
 
 void ChangeSize(int nWidth, int nHeight) {
     
+    glViewport(0, 0, nWidth, nHeight);
+    
+    viewFrustum.SetPerspective(65.0f, float(nWidth)/float(nHeight), 1.0f, 500.0f);
+    modelViewMatrix.LoadMatrix(viewFrustum.GetProjectionMatrix());
+    
+    transformPipeline.SetMatrixStacks(modelViewMatrix, projectionMatrix);
 }
 
 void SetupRC() {
     
+    //设置清屏颜色到颜色缓存区
+    glClearColor(0, 0, 0, 1.0f);
+    
+    //初始化着色器管理器
+    shaderManager.InitializeStockShaders();
+    
+//    //开启深度测试
+//    glEnable(GL_DEPTH_TEST);
+//    //开启背面剔除
+//    glEnable(GL_CULL_FACE);
+    
+    // 设置大球
+    gltMakeSphere(torusBatch, 0.4f, 40, 80);
+    
+    // 设置小球(公转自转)
+    gltMakeSphere(sphereBatch, 0.1f, 13, 26);
+    
+    // 设置地板顶点数据&地板纹理
+    GLfloat texSize = 10.0f;
+    floorBatch.Begin(GL_TRIANGLE_FAN, 4, 1);
+    
+    floorBatch.MultiTexCoord2f(0, 0, 0);
+    floorBatch.Vertex3f(-20.0f, -0.41f, 20.0f);
+    
+    floorBatch.MultiTexCoord2f(0, texSize, 0.0f);
+    floorBatch.Vertex3f(20.0f, -0.41f, 20.0f);
+    
+    floorBatch.MultiTexCoord2f(0, texSize, texSize);
+    floorBatch.Vertex3f(20.0f, -0.41f, -20.0f);
+    
+    floorBatch.MultiTexCoord2f(0, 0, texSize);
+    floorBatch.Vertex3f(-20.0f, -0.41f, -20.0f);
+    
+    floorBatch.End();
+    
+    for (int i = 0; i < NUM_SPHERES; i++) {
+        GLfloat x = (GLfloat)(rand() % 400 - 200) * 0.1f;
+        GLfloat z = (GLfloat)(rand() % 400 - 200) * 0.1f;
+        
+        spheres[i].SetOrigin(x, 0, z);
+    }
+    
+    //生成纹理对象
+    glGenTextures(3, uiTextures);
+    
+    glBindTexture(GL_TEXTURE_2D, uiTextures[0]);
+    LoadTGATexture("marble.tga", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, GL_REPEAT);
+    
+    glBindTexture(GL_TEXTURE_2D, uiTextures[1]);
+    LoadTGATexture("marslike.tga", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, GL_CLAMP_TO_EDGE);
+    
+    glBindTexture(GL_TEXTURE_2D, uiTextures[2]);
+    LoadTGATexture("moonlike.tga", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, GL_CLAMP_TO_EDGE);
 }
 
 int main(int argc, char* argv[]) {
