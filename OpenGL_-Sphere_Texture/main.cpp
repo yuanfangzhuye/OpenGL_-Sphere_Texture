@@ -40,15 +40,62 @@ GLFrame spheres[NUM_SPHERES];
 GLuint uiTextures[3];
 
 void ShutdownRC(void) {
-    
+    glDeleteTextures(3, uiTextures);
 }
 
 void SpeacialKeys(int key,int x,int y) {
     
+    float liner = 0.1f;
+    float angular = float(m3dDegToRad(5.0f));
+    
+    if (key == GLUT_KEY_UP) {
+        cameraFrame.MoveForward(liner);
+    }
+    if (key == GLUT_KEY_DOWN) {
+        cameraFrame.MoveForward(-liner);
+    }
+    if (key == GLUT_KEY_LEFT) {
+        cameraFrame.RotateWorld(angular, 0, 1.0f, 0);
+    }
+    if (key == GLUT_KEY_RIGHT) {
+        cameraFrame.RotateWorld(-angular, 0, 1.0f, 0);
+    }
+    
+    glutPostRedisplay();
 }
 
 void drawSomething(GLfloat yRot) {
     
+    //1.定义光源位置&漫反射颜色
+    static GLfloat vWhite[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    static GLfloat vLightPos[] = { 0.0f, 3.0f, 0.0f, 1.0f };
+    
+    //大球
+    modelViewMatrix.Translate(0, 0.2f, -2.5f);
+    modelViewMatrix.PushMatrix();
+    modelViewMatrix.Rotate(yRot, 0, 1.0f, 0);
+    glBindTexture(GL_TEXTURE_2D, uiTextures[1]);
+    shaderManager.UseStockShader(GLT_SHADER_TEXTURE_POINT_LIGHT_DIFF, transformPipeline.GetModelViewMatrix(), transformPipeline.GetProjectionMatrix(), vLightPos, vWhite, 0);
+    torusBatch.Draw();
+    modelViewMatrix.PopMatrix();
+    
+    //小球
+    glBindTexture(GL_TEXTURE_2D, uiTextures[2]);
+    for (int i = 0; i < NUM_SPHERES; i++) {
+        modelViewMatrix.PushMatrix();
+        modelViewMatrix.MultMatrix(spheres[i]);
+        shaderManager.UseStockShader(GLT_SHADER_TEXTURE_POINT_LIGHT_DIFF, transformPipeline.GetModelViewMatrix(), transformPipeline.GetProjectionMatrix(), vLightPos, vWhite, 0);
+        sphereBatch.Draw();
+        modelViewMatrix.PopMatrix();
+    }
+    
+    modelViewMatrix.PushMatrix();
+    modelViewMatrix.Rotate(yRot * -2, 0, 1.0, 0);
+    modelViewMatrix.Translate(0.8f, 0, 0);
+    glBindTexture(GL_TEXTURE_2D, uiTextures[2]);
+    shaderManager.UseStockShader(GLT_SHADER_TEXTURE_POINT_LIGHT_DIFF, transformPipeline.GetModelViewMatrix(), transformPipeline.GetProjectionMatrix(), vLightPos, vWhite, 0);
+    sphereBatch.Draw();
+    modelViewMatrix.PopMatrix();
 }
 
 bool LoadTGATexture(const char *szFileName, GLenum minFilter, GLenum magFilter, GLenum wrapMode) {
@@ -88,7 +135,45 @@ bool LoadTGATexture(const char *szFileName, GLenum minFilter, GLenum magFilter, 
 }
 
 void RenderScene(void) {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     
+    static CStopWatch rotTimer;
+    float yRot = rotTimer.GetElapsedSeconds() * 60.0f;
+    
+    GLfloat vGreenColor[] = {1.0f, 1.0f, 1.0f, 0.7f};
+    
+    modelViewMatrix.PushMatrix();
+    
+    M3DMatrix44f mCamera;
+    cameraFrame.GetCameraMatrix(mCamera);
+    modelViewMatrix.MultMatrix(mCamera);
+    
+    //镜面以下
+    modelViewMatrix.PushMatrix();
+    modelViewMatrix.Scale(1.0f, -1.0f, 1.0f);
+    modelViewMatrix.Translate(0, 0.8f, 0);
+    
+    glFrontFace(GL_CW);
+    drawSomething(yRot);
+    glFrontFace(GL_CCW);
+    
+    modelViewMatrix.PopMatrix();
+    
+    //绘制地板
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    glBindTexture(GL_TEXTURE_2D, uiTextures[0]);
+    shaderManager.UseStockShader(GLT_SHADER_TEXTURE_MODULATE, transformPipeline.GetModelViewProjectionMatrix(), vGreenColor, 0);
+    floorBatch.Draw();
+    glDisable(GL_BLEND);
+    
+    drawSomething(yRot);
+    
+    modelViewMatrix.PopMatrix();
+    
+    glutSwapBuffers();
+    glutPostRedisplay();
 }
 
 void ChangeSize(int nWidth, int nHeight) {
@@ -109,10 +194,10 @@ void SetupRC() {
     //初始化着色器管理器
     shaderManager.InitializeStockShaders();
     
-//    //开启深度测试
-//    glEnable(GL_DEPTH_TEST);
-//    //开启背面剔除
-//    glEnable(GL_CULL_FACE);
+    //开启深度测试
+    glEnable(GL_DEPTH_TEST);
+    //开启背面剔除
+    glEnable(GL_CULL_FACE);
     
     // 设置大球
     gltMakeSphere(torusBatch, 0.4f, 40, 80);
